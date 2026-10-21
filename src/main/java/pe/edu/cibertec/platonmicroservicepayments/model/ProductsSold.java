@@ -4,9 +4,10 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
-@Table(name = "products_sold", schema = "sgestionlibreria_payment")
+@Table(name = "products_sold", schema = "payment")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,6 +33,9 @@ public class ProductsSold {
 
     @Column(name = "create_date", nullable = false, updatable = false)
     private LocalDateTime createDate;
+
+    @Column(name = "stock_deduction_id")
+    private UUID stockDeductionId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_state_sold", nullable = false)

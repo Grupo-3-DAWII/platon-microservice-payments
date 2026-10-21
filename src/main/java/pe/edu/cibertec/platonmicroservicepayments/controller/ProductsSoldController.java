@@ -2,16 +2,14 @@ package pe.edu.cibertec.platonmicroservicepayments.controller;
 
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
 import pe.edu.cibertec.platonmicroservicepayments.service.ProductsSoldService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import java.net.URI;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/products-sold")
@@ -22,8 +20,8 @@ public class ProductsSoldController {
     //listar ventas
     //http://localhost:8082/api/v1/products-sold
     @GetMapping
-    public List<ProductsSoldResponse> list(@RequestParam(required = false) Long idUser) {
-        return service.findAll(idUser);
+    public ResponseEntity<ProductsSoldPageResponse> list(@ModelAttribute ProductsSoldFilterRequest filters) {
+        return ResponseEntity.ok(service.findAll(filters));
     }
 
     //http://localhost:8082/api/v1/products-sold/2
@@ -37,10 +35,17 @@ public class ProductsSoldController {
     //Registrar venta
     @PostMapping
     public ResponseEntity<ProductsSoldResponse> create(@Valid @RequestBody ProductsSoldRequest request) {
-        ProductsSoldResponse created = service.create(request);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}").buildAndExpand(created.idProductsSold()).toUri();
-        return ResponseEntity.created(location).body(created);
+        return ResponseEntity.ok(service.create(request));
+    }
+
+    @PostMapping("/{id}/payment/accept")
+    public ResponseEntity<ProductsSoldResponse> acceptPayment(@PathVariable Long id) {
+        return ResponseEntity.ok(service.acceptPayment(id));
+    }
+
+    @PostMapping("/{id}/payment/reject")
+    public ResponseEntity<ProductsSoldResponse> rejectPayment(@PathVariable Long id) {
+        return ResponseEntity.ok(service.rejectPayment(id));
     }
     //http://localhost:8082/api/v1/products-sold/3
     //Actualizar venta

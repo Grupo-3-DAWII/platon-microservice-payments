@@ -2,17 +2,21 @@ package pe.edu.cibertec.platonmicroservicepayments.service;
 
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
-
-import java.util.List;
+import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
 
 public interface ProductsSoldService {
 
-    /** Lista todas las ventas o, si idUser no es null, solo las de ese usuario. */
-    List<ProductsSoldResponse> findAll(Long idUser);
+    /** Pagina las ventas filtradas por usuario y estado. */
+    ProductsSoldPageResponse findAll(ProductsSoldFilterRequest filters);
 
     ProductsSoldResponse findById(Long id);
 
     ProductsSoldResponse create(ProductsSoldRequest request);
+
+    ProductsSoldResponse acceptPayment(Long id);
+
+    ProductsSoldResponse rejectPayment(Long id);
 
     ProductsSoldResponse update(Long id, ProductsSoldRequest request);
 

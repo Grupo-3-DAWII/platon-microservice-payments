@@ -23,6 +23,31 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ProductUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleProductUnavailable(ProductUnavailableException ex,
+                                                                      HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(PurchaseValidationTimeoutException.class)
+    public ResponseEntity<ApiErrorResponse> handlePurchaseTimeout(PurchaseValidationTimeoutException ex,
+                                                                   HttpServletRequest request) {
+        return build(HttpStatus.GATEWAY_TIMEOUT, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(PurchaseValidationUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handlePurchaseValidationUnavailable(PurchaseValidationUnavailableException ex,
+                                                                                 HttpServletRequest request) {
+        log.warn("Validacion de compra no disponible: {}", ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidArgument(IllegalArgumentException ex,
+                                                                  HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleNotFound(ResourceNotFoundException ex,
                                                            HttpServletRequest request) {
