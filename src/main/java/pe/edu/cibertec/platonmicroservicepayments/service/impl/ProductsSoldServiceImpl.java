@@ -5,6 +5,10 @@ import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
+import pe.edu.cibertec.platonmicroservicepayments.repository.ProductPriceRepository;
+import java.math.BigDecimal;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ResourceNotFoundException;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ProductUnavailableException;
 import pe.edu.cibertec.platonmicroservicepayments.mapper.ProductsSoldMapper;
@@ -25,7 +29,6 @@ import org.springframework.data.domain.PageRequest;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.HashSet;
 
@@ -43,6 +46,7 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     private final PurchaseRegistrationService purchaseRegistration;
     private final PaymentDecisionService paymentDecision;
     private final StockReturnCompensationService compensation;
+    private final ProductPriceRepository prices;
 
     @Override
     @Transactional(readOnly = true)
@@ -80,8 +84,8 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
 
     @Override
     @Transactional(readOnly = true)
-    public ProductsSoldResponse findById(Long id) {
-        return mapper.toResponse(getOrThrow(id));
+    public PurchaseResponse findById(Long id) {
+        return mapper.toPurchaseResponse(getOrThrow(id));
     }
 
     @Override
@@ -106,13 +110,13 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     }
 
     @Override
-    public ProductsSoldResponse acceptPayment(Long id) {
-        return paymentDecision.accept(id);
+    public PurchaseResponse acceptPayment(Long id, PaymentRequest request) {
+        return paymentDecision.accept(id, request.amount());
     }
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public List<ProductsSoldResponse> createMultiple(PurchaseRequest request) {
+    public PurchaseResponse createMultiple(PurchaseRequest request) {
         if (!"PENDIENTE".equalsIgnoreCase(getStateOrThrow(request.idStateSold()).getNameState())) {
             throw new IllegalArgumentException("La solicitud de compra debe iniciar en estado PENDIENTE");
         }
@@ -122,12 +126,25 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
                 throw new IllegalArgumentException("No repita productos; indique la cantidad total en numberSold");
             }
         }
+        var unitPrices = prices.findUnitPrices(request.products().stream()
+                .map(PurchaseRequest.Item::idProducts).toList());
+        BigDecimal total = new BigDecimal("0.00");
+        for (var item : request.products()) {
+            var price = unitPrices.get(item.idProducts());
+            if (price == null || price.signum() < 0) {
+                throw new ProductUnavailableException("No hay un precio valido para el producto " + item.idProducts());
+            }
+            total = total.add(price.multiply(BigDecimal.valueOf(item.numberSold())));
+        }
+        if (request.totalAmount() == null || total.compareTo(request.totalAmount()) != 0) {
+            throw new ProductUnavailableException("El monto enviado no coincide con el total calculado: " + total);
+        }
         var attempted = new ArrayList<PurchaseStockDeduction>();
         try {
             for (var item : request.products()) {
                 var line = new ProductsSoldRequest(item.idProducts(), request.idUser(),
                         item.numberSold(), request.idStateSold());
-                var deduction = new PurchaseStockDeduction(line, UUID.randomUUID());
+                var deduction = new PurchaseStockDeduction(line, UUID.randomUUID(), unitPrices.get(item.idProducts()));
                 // Incluir tambien la solicitud que falla: un timeout puede ocultar un descuento aplicado.
                 attempted.add(deduction);
                 availabilityClient.requireAvailable(line, deduction.deductionId());
@@ -148,14 +165,14 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     }
 
     @Override
-    public ProductsSoldResponse rejectPayment(Long id) {
+    public PurchaseResponse rejectPayment(Long id) {
         return paymentDecision.reject(id);
     }
 
     @Override
     public ProductsSoldResponse update(Long id, ProductsSoldRequest request) {
         ProductsSold entity = getOrThrow(id);
-        if (entity.getStockDeductionId() != null) {
+        if (entity.hasStockDeduction()) {
             throw new ProductUnavailableException("Use los endpoints de aceptar o rechazar el pago para esta compra");
         }
         StateSold state = getStateOrThrow(request.idStateSold());
@@ -166,7 +183,7 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     @Override
     public ProductsSoldResponse changeState(Long id, Long idStateSold) {
         ProductsSold entity = getOrThrow(id);
-        if (entity.getStockDeductionId() != null) {
+        if (entity.hasStockDeduction()) {
             throw new ProductUnavailableException("Use los endpoints de aceptar o rechazar el pago para esta compra");
         }
         entity.setStateSold(getStateOrThrow(idStateSold));
@@ -176,7 +193,7 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     @Override
     public void delete(Long id) {
         var purchase = getOrThrow(id);
-        if (purchase.getStockDeductionId() != null) {
+        if (purchase.hasStockDeduction()) {
             throw new ProductUnavailableException("Las compras con stock descontado se conservan; rechace el pago para devolverlo");
         }
         repository.delete(purchase);

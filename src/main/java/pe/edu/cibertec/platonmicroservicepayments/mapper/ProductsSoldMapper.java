@@ -2,6 +2,9 @@ package pe.edu.cibertec.platonmicroservicepayments.mapper;
 
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
+import pe.edu.cibertec.platonmicroservicepayments.model.ProductsSoldItem;
+import java.util.List;
 import pe.edu.cibertec.platonmicroservicepayments.model.ProductsSold;
 import pe.edu.cibertec.platonmicroservicepayments.model.StateSold;
 import lombok.RequiredArgsConstructor;
@@ -37,5 +40,21 @@ public class ProductsSoldMapper {
                 entity.getNumberSold(),
                 entity.getCreateDate(),
                 stateSoldMapper.toResponse(entity.getStateSold()));
+    }
+
+    public PurchaseResponse toPurchaseResponse(ProductsSold entity) {
+        var products = entity.getItems().isEmpty()
+                ? List.of(new PurchaseResponse.Item(entity.getIdProducts(), entity.getNumberSold(), null, null))
+                : entity.getItems().stream()
+                    .map(item -> new PurchaseResponse.Item(item.getIdProducts(), item.getNumberSold(),
+                            item.getUnitPrice(), item.subtotal())).toList();
+        return new PurchaseResponse(entity.getIdProductsSold(), entity.getIdUser(), entity.getCreateDate(),
+                stateSoldMapper.toResponse(entity.getStateSold()), products, entity.getTotalAmount());
+    }
+
+    /** Mantiene el contrato de eventos por producto usado por Products. */
+    public ProductsSoldResponse toItemResponse(ProductsSold sale, ProductsSoldItem item) {
+        return new ProductsSoldResponse(sale.getIdProductsSold(), item.getIdProducts(), sale.getIdUser(),
+                item.getNumberSold(), sale.getCreateDate(), stateSoldMapper.toResponse(sale.getStateSold()));
     }
 }

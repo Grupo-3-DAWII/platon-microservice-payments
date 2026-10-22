@@ -20,13 +20,23 @@ public class UserProductsRepository {
     }
 
     public void assign(ProductsSold purchase) {
+        if (purchase.getItems().isEmpty()) {
+            assignItem(purchase, purchase.getIdProducts(), purchase.getNumberSold());
+        } else {
+            for (var item : purchase.getItems()) {
+                assignItem(purchase, item.getIdProducts(), item.getNumberSold());
+            }
+        }
+    }
+
+    private void assignItem(ProductsSold purchase, Long idProducts, Integer quantity) {
         jdbc.sql("""
                 INSERT INTO payment.user_products (id_products_sold, id_user, id_products, quantity)
                 VALUES (:sale, :buyer, :product, :quantity)
-                ON CONFLICT (id_products_sold) DO NOTHING
+                ON CONFLICT (id_products_sold, id_products) DO NOTHING
                 """)
                 .param("sale", purchase.getIdProductsSold()).param("buyer", purchase.getIdUser())
-                .param("product", purchase.getIdProducts()).param("quantity", purchase.getNumberSold()).update();
+                .param("product", idProducts).param("quantity", quantity).update();
     }
 
     public List<UserProductResponse> findByIdUser(Long idUser) {

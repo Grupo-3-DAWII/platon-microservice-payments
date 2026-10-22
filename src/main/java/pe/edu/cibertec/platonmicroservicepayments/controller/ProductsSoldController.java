@@ -2,7 +2,8 @@ package pe.edu.cibertec.platonmicroservicepayments.controller;
 
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
-import java.util.List;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
@@ -29,24 +30,25 @@ public class ProductsSoldController {
     //http://localhost:8082/api/v1/products-sold/2
     //Obtener venta por id
     @GetMapping("/{id}")
-    public ProductsSoldResponse get(@PathVariable Long id) {
+    public PurchaseResponse get(@PathVariable Long id) {
         return service.findById(id);
     }
 
     //http://localhost:8082/api/v1/products-sold
     //Registrar venta
     @PostMapping
-    public ResponseEntity<List<ProductsSoldResponse>> create(@Valid @RequestBody PurchaseRequest request) {
+    public ResponseEntity<PurchaseResponse> create(@Valid @RequestBody PurchaseRequest request) {
         return ResponseEntity.ok(service.createMultiple(request));
     }
 
     @PostMapping("/{id}/payment/accept")
-    public ResponseEntity<ProductsSoldResponse> acceptPayment(@PathVariable Long id) {
-        return ResponseEntity.ok(service.acceptPayment(id));
+    public ResponseEntity<PurchaseResponse> acceptPayment(@PathVariable Long id,
+            @Valid @RequestBody PaymentRequest request) {
+        return ResponseEntity.ok(service.acceptPayment(id, request));
     }
 
     @PostMapping("/{id}/payment/reject")
-    public ResponseEntity<ProductsSoldResponse> rejectPayment(@PathVariable Long id) {
+    public ResponseEntity<PurchaseResponse> rejectPayment(@PathVariable Long id) {
         return ResponseEntity.ok(service.rejectPayment(id));
     }
     //http://localhost:8082/api/v1/products-sold/3

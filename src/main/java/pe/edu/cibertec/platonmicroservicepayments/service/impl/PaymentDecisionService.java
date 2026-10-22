@@ -3,7 +3,7 @@ package pe.edu.cibertec.platonmicroservicepayments.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ProductUnavailableException;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ResourceNotFoundException;
 import pe.edu.cibertec.platonmicroservicepayments.mapper.ProductsSoldMapper;
@@ -11,6 +11,7 @@ import pe.edu.cibertec.platonmicroservicepayments.repository.ProductsSoldReposit
 import pe.edu.cibertec.platonmicroservicepayments.repository.PurchaseOutboxRepository;
 import pe.edu.cibertec.platonmicroservicepayments.repository.StateSoldRepository;
 import pe.edu.cibertec.platonmicroservicepayments.repository.UserProductsRepository;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -22,30 +23,40 @@ public class PaymentDecisionService {
     private final PurchaseOutboxRepository outbox;
 
     @Transactional
-    public ProductsSoldResponse accept(Long id) {
-        return decide(id, true);
+    public PurchaseResponse accept(Long id, BigDecimal amount) {
+        return decide(id, true, amount);
     }
 
     @Transactional
-    public ProductsSoldResponse reject(Long id) {
-        return decide(id, false);
+    public PurchaseResponse reject(Long id) {
+        return decide(id, false, null);
     }
 
-    private ProductsSoldResponse decide(Long id, boolean accepted) {
+    private PurchaseResponse decide(Long id, boolean accepted, BigDecimal amount) {
         var purchase = purchases.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada con id: " + id));
         String target = accepted ? "PAGADO" : "CANCELADO";
         String current = purchase.getStateSold().getNameState();
+        if (accepted) {
+            if (purchase.getTotalAmount() == null) {
+                throw new ProductUnavailableException("Esta venta anterior no tiene un total verificado");
+            }
+            if (amount == null || amount.compareTo(purchase.getTotalAmount()) != 0) {
+                throw new ProductUnavailableException("El monto del pago no coincide con el total de la venta: "
+                        + purchase.getTotalAmount());
+            }
+        }
         if (target.equalsIgnoreCase(current)) {
             if (accepted) {
                 userProducts.assign(purchase);
             }
-            return mapper.toResponse(purchase);
+            return mapper.toPurchaseResponse(purchase);
         }
         if (!"PENDIENTE".equalsIgnoreCase(current)) {
             throw new ProductUnavailableException("El pago ya fue resuelto como " + current);
         }
-        if (purchase.getStockDeductionId() == null) {
+        if (purchase.getItems().isEmpty() ? purchase.getStockDeductionId() == null
+                : purchase.getItems().stream().anyMatch(item -> item.getStockDeductionId() == null)) {
             throw new ProductUnavailableException("Esta compra anterior no tiene un descuento de stock asociado");
         }
         purchase.setStateSold(states.findFirstByNameStateIgnoreCase(target)
@@ -53,8 +64,14 @@ public class PaymentDecisionService {
         if (accepted) {
             userProducts.assign(purchase);
         } else {
-            outbox.enqueue(mapper.toResponse(purchase), purchase.getStockDeductionId(), "payment.rejected");
+            if (purchase.getItems().isEmpty()) {
+                outbox.enqueue(mapper.toResponse(purchase), purchase.getStockDeductionId(), "payment.rejected");
+            } else {
+                for (var item : purchase.getItems()) {
+                    outbox.enqueue(mapper.toItemResponse(purchase, item), item.getStockDeductionId(), "payment.rejected");
+                }
+            }
         }
-        return mapper.toResponse(purchase);
+        return mapper.toPurchaseResponse(purchase);
     }
 }

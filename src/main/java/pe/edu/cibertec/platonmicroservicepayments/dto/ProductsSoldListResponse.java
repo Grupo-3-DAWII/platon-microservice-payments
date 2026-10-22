@@ -1,17 +1,20 @@
 package pe.edu.cibertec.platonmicroservicepayments.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.math.BigDecimal;
 
 public record ProductsSoldListResponse(
         Long idProductsSold,
-        String idProducts,
         Long idUser,
-        Integer numberSold,
         LocalDateTime createDate,
         StateSoldResponse stateSold,
         BuyerResponse buyer,
-        ProductResponse product
+        List<ItemResponse> products,
+        BigDecimal totalAmount
 ) {
+    public record ItemResponse(Long idProducts, Integer numberSold, ProductResponse product,
+                               BigDecimal unitPrice, BigDecimal subtotal) {}
     public record BuyerResponse(String name, String lastname) {}
 
     public record ProductResponse(String name, String isbn, String author) {}

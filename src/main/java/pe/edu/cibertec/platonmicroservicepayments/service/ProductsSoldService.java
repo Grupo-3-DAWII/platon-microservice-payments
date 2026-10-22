@@ -5,22 +5,23 @@ import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
-import java.util.List;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
 
 public interface ProductsSoldService {
 
     /** Pagina las ventas filtradas por usuario y estado. */
     ProductsSoldPageResponse findAll(ProductsSoldFilterRequest filters);
 
-    ProductsSoldResponse findById(Long id);
+    PurchaseResponse findById(Long id);
 
     ProductsSoldResponse create(ProductsSoldRequest request);
 
-    List<ProductsSoldResponse> createMultiple(PurchaseRequest request);
+    PurchaseResponse createMultiple(PurchaseRequest request);
 
-    ProductsSoldResponse acceptPayment(Long id);
+    PurchaseResponse acceptPayment(Long id, PaymentRequest request);
 
-    ProductsSoldResponse rejectPayment(Long id);
+    PurchaseResponse rejectPayment(Long id);
 
     ProductsSoldResponse update(Long id, ProductsSoldRequest request);
 

@@ -14,6 +14,7 @@ import pe.edu.cibertec.platonmicroservicepayments.repository.*;
 import pe.edu.cibertec.platonmicroservicepayments.service.impl.PaymentDecisionService;
 
 import java.util.Optional;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,11 +34,11 @@ class PaymentDecisionServiceTest {
         var purchase = purchase("PENDIENTE");
         when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase));
         when(states.findFirstByNameStateIgnoreCase("PAGADO")).thenReturn(Optional.of(state("PAGADO")));
-        service.accept(1L);
+        service.accept(1L, new BigDecimal("10.00"));
         assertEquals("PAGADO", purchase.getStateSold().getNameState());
         verify(userProducts).assign(purchase);
         verifyNoInteractions(outbox);
-        service.accept(1L);
+        service.accept(1L, new BigDecimal("10.00"));
         verifyNoInteractions(outbox);
     }
 
@@ -58,7 +59,7 @@ class PaymentDecisionServiceTest {
         when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase("PAGADO")));
         assertThrows(ProductUnavailableException.class, () -> service.reject(1L));
         when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase("CANCELADO")));
-        assertThrows(ProductUnavailableException.class, () -> service.accept(1L));
+        assertThrows(ProductUnavailableException.class, () -> service.accept(1L, new BigDecimal("10.00")));
         verifyNoInteractions(userProducts, outbox);
     }
 
@@ -73,12 +74,40 @@ class PaymentDecisionServiceTest {
 
     @Test
     void missingPurchaseIsNotFound() {
-        assertThrows(ResourceNotFoundException.class, () -> service.accept(1L));
+        assertThrows(ResourceNotFoundException.class, () -> service.accept(1L, new BigDecimal("10.00")));
+    }
+
+    @Test
+    void incorrectAmountDoesNotChangeStateAssignProductsOrPublishEvents() {
+        var purchase = purchase("PENDIENTE");
+        when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase));
+        for (String amount : java.util.List.of("9.99", "10.01")) {
+            assertThrows(ProductUnavailableException.class, () -> service.accept(1L, new BigDecimal(amount)));
+            assertEquals("PENDIENTE", purchase.getStateSold().getNameState());
+        }
+        verifyNoInteractions(states, userProducts, outbox);
+    }
+
+    @Test
+    void repeatedAcceptanceStillRequiresCorrectAmount() {
+        var purchase = purchase("PAGADO");
+        when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase));
+        assertThrows(ProductUnavailableException.class, () -> service.accept(1L, new BigDecimal("0.01")));
+        verifyNoInteractions(userProducts, outbox);
+    }
+
+    @Test
+    void historicalSaleWithUnknownTotalCannotBeConfirmedWithAnInventedAmount() {
+        var purchase = purchase("PENDIENTE");
+        purchase.setTotalAmount(null);
+        when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase));
+        assertThrows(ProductUnavailableException.class, () -> service.accept(1L, BigDecimal.ZERO));
+        verifyNoInteractions(states, userProducts, outbox);
     }
 
     private ProductsSold purchase(String status) {
         return ProductsSold.builder().idProductsSold(1L).idProducts(1L).idUser(2L).numberSold(1)
-                .stockDeductionId(UUID.randomUUID()).stateSold(state(status)).build();
+                .stockDeductionId(UUID.randomUUID()).totalAmount(new BigDecimal("10.00")).stateSold(state(status)).build();
     }
 
     private StateSold state(String name) {
