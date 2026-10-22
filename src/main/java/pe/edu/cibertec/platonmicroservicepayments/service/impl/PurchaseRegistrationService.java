@@ -11,6 +11,7 @@ import pe.edu.cibertec.platonmicroservicepayments.repository.ProductsSoldReposit
 import pe.edu.cibertec.platonmicroservicepayments.repository.PurchaseOutboxRepository;
 import pe.edu.cibertec.platonmicroservicepayments.repository.StateSoldRepository;
 import java.util.UUID;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +21,14 @@ public class PurchaseRegistrationService {
     private final StateSoldRepository stateRepository;
     private final ProductsSoldMapper mapper;
     private final PurchaseOutboxRepository outbox;
+
+    /** Todas las ventas y sus eventos se confirman en la misma transaccion. */
+    @Transactional
+    public List<ProductsSoldResponse> registerAll(List<PurchaseStockDeduction> deductions) {
+        return deductions.stream()
+                .map(deduction -> register(deduction.request(), deduction.deductionId()))
+                .toList();
+    }
 
     @Transactional
     public ProductsSoldResponse register(ProductsSoldRequest request) {

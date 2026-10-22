@@ -8,10 +8,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
 import pe.edu.cibertec.platonmicroservicepayments.service.impl.PurchaseRegistrationService;
+import pe.edu.cibertec.platonmicroservicepayments.service.impl.PurchaseStockDeduction;
 import pe.edu.cibertec.platonmicroservicepayments.event.PurchaseCreatedEvent;
 import tools.jackson.databind.json.JsonMapper;
 
 import javax.sql.DataSource;
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,9 +27,9 @@ class PurchaseOutboxIntegrationTests {
     @Autowired private JsonMapper jsonMapper;
 
     @Test
-    void purchaseAndEventShareTransactionAndBothDisappearOnRollback() {
+    void allPurchasesAndEventsShareTransactionAndDisappearOnRollback() {
         var jdbc = JdbcClient.create(dataSource);
-        Long purchaseId = new TransactionTemplate(transactionManager).execute(transaction -> {
+        List<Long> purchaseIds = new TransactionTemplate(transactionManager).execute(transaction -> {
             transaction.setRollbackOnly();
             long editorial = jdbc.sql("""
                     INSERT INTO products.editorial (name) VALUES ('Outbox test editorial')
@@ -46,23 +49,31 @@ class PurchaseOutboxIntegrationTests {
                     SELECT id_state_sold FROM payment.state_sold WHERE name_state = 'PENDIENTE' LIMIT 1
                     """).query(Long.class).single();
 
-            var purchase = service.register(new ProductsSoldRequest(productId, 2L, 1, stateId));
-            String payload = jdbc.sql("""
-                    SELECT payload FROM payment.purchase_event_outbox WHERE id_products_sold = :id
-                    """).param("id", purchase.idProductsSold()).query(String.class).single();
-            var event = jsonMapper.readValue(payload, PurchaseCreatedEvent.class);
-            assertEquals("purchase.created", event.eventType());
-            assertEquals(1, event.eventVersion());
-            assertEquals(purchase.idProductsSold(), event.idProductsSold());
-            assertEquals(productId, event.idProducts());
-            assertEquals("PENDIENTE", event.state());
-            assertNotNull(event.eventId());
-            return purchase.idProductsSold();
+            var purchases = service.registerAll(List.of(
+                    new PurchaseStockDeduction(new ProductsSoldRequest(productId, 2L, 1, stateId), UUID.randomUUID()),
+                    new PurchaseStockDeduction(new ProductsSoldRequest(productId, 2L, 2, stateId), UUID.randomUUID())));
+            assertEquals(2, purchases.size());
+            for (var purchase : purchases) {
+                String payload = jdbc.sql("""
+                        SELECT payload FROM payment.purchase_event_outbox WHERE id_products_sold = :id
+                        """).param("id", purchase.idProductsSold()).query(String.class).single();
+                var event = jsonMapper.readValue(payload, PurchaseCreatedEvent.class);
+                assertEquals("purchase.created", event.eventType());
+                assertEquals(1, event.eventVersion());
+                assertEquals(purchase.idProductsSold(), event.idProductsSold());
+                assertEquals(productId, event.idProducts());
+                assertEquals("PENDIENTE", event.state());
+                assertNotNull(event.eventId());
+            }
+            return purchases.stream().map(purchase -> purchase.idProductsSold()).toList();
         });
 
-        assertEquals(0L, jdbc.sql("SELECT COUNT(*) FROM payment.products_sold WHERE id_products_sold = :id")
-                .param("id", purchaseId).query(Long.class).single());
-        assertEquals(0L, jdbc.sql("SELECT COUNT(*) FROM payment.purchase_event_outbox WHERE id_products_sold = :id")
-                .param("id", purchaseId).query(Long.class).single());
+        assertNotNull(purchaseIds);
+        for (Long purchaseId : purchaseIds) {
+            assertEquals(0L, jdbc.sql("SELECT COUNT(*) FROM payment.products_sold WHERE id_products_sold = :id")
+                    .param("id", purchaseId).query(Long.class).single());
+            assertEquals(0L, jdbc.sql("SELECT COUNT(*) FROM payment.purchase_event_outbox WHERE id_products_sold = :id")
+                    .param("id", purchaseId).query(Long.class).single());
+        }
     }
 }

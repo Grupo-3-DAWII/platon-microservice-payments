@@ -4,6 +4,7 @@ import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ResourceNotFoundException;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ProductUnavailableException;
 import pe.edu.cibertec.platonmicroservicepayments.mapper.ProductsSoldMapper;
@@ -24,6 +25,9 @@ import org.springframework.data.domain.PageRequest;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
 
 @Service
 @Slf4j
@@ -104,6 +108,43 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     @Override
     public ProductsSoldResponse acceptPayment(Long id) {
         return paymentDecision.accept(id);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public List<ProductsSoldResponse> createMultiple(PurchaseRequest request) {
+        if (!"PENDIENTE".equalsIgnoreCase(getStateOrThrow(request.idStateSold()).getNameState())) {
+            throw new IllegalArgumentException("La solicitud de compra debe iniciar en estado PENDIENTE");
+        }
+        var productIds = new HashSet<Long>();
+        for (var item : request.products()) {
+            if (!productIds.add(item.idProducts())) {
+                throw new IllegalArgumentException("No repita productos; indique la cantidad total en numberSold");
+            }
+        }
+        var attempted = new ArrayList<PurchaseStockDeduction>();
+        try {
+            for (var item : request.products()) {
+                var line = new ProductsSoldRequest(item.idProducts(), request.idUser(),
+                        item.numberSold(), request.idStateSold());
+                var deduction = new PurchaseStockDeduction(line, UUID.randomUUID());
+                // Incluir tambien la solicitud que falla: un timeout puede ocultar un descuento aplicado.
+                attempted.add(deduction);
+                availabilityClient.requireAvailable(line, deduction.deductionId());
+            }
+            return purchaseRegistration.registerAll(attempted);
+        } catch (RuntimeException ex) {
+            for (var deduction : attempted) {
+                try {
+                    compensation.enqueue(deduction.request(), deduction.deductionId());
+                } catch (RuntimeException compensationFailure) {
+                    log.error("No se pudo registrar la devolucion compensatoria {}",
+                            deduction.deductionId(), compensationFailure);
+                    ex.addSuppressed(compensationFailure);
+                }
+            }
+            throw ex;
+        }
     }
 
     @Override

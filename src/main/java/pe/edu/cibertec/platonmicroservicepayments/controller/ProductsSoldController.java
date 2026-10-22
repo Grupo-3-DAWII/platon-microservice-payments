@@ -1,6 +1,8 @@
 package pe.edu.cibertec.platonmicroservicepayments.controller;
 
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
+import java.util.List;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
 import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
@@ -34,8 +36,8 @@ public class ProductsSoldController {
     //http://localhost:8082/api/v1/products-sold
     //Registrar venta
     @PostMapping
-    public ResponseEntity<ProductsSoldResponse> create(@Valid @RequestBody ProductsSoldRequest request) {
-        return ResponseEntity.ok(service.create(request));
+    public ResponseEntity<List<ProductsSoldResponse>> create(@Valid @RequestBody PurchaseRequest request) {
+        return ResponseEntity.ok(service.createMultiple(request));
     }
 
     @PostMapping("/{id}/payment/accept")

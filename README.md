@@ -76,14 +76,14 @@ Ambos endpoints devuelven `200 OK`. La devolucion por rechazo es asincrona y se 
 | Routing key de respuesta por instancia | `purchase.availability.checked.<uuid>` |
 | Panel de administracion | `http://localhost:15672` |
 
-La aplicacion declara automaticamente el exchange, la cola y su binding. Las variables `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD` permiten cambiar la conexion. Los nombres se configuran con `app.rabbitmq.purchase.exchange`, `routing-key` y `queue`.
+El Docker Compose de `../DATABASE` levanta PostgreSQL y RabbitMQ con `docker compose up -d --wait`. El broker carga sus exchanges, colas durables y bindings desde `DATABASE/rabbitmq/definitions.json`; Payments solo crea su cola temporal de respuestas y el binding de esa instancia. Las variables `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD` permiten cambiar la conexion. Los nombres de los clientes siguen en Config Server y deben coincidir con el init de DATABASE.
 
 Ejemplo para registrar y publicar una compra (el estado `1` debe existir):
 
 ```bash
 curl --request POST 'http://localhost:8082/api/v1/products-sold' \
   --header 'Content-Type: application/json' \
-  --data '{"idProducts":1,"idUser":2,"numberSold":1,"idStateSold":1}'
+  --data '{"idUser":2,"idStateSold":1,"products":[{"idProducts":1,"numberSold":1},{"idProducts":2,"numberSold":3}]}'
 ```
 
 Los eventos `purchase.created` y `payment.rejected` contienen `eventId` (UUID), `eventType`, `eventVersion`, `occurredAt` (UTC), `idProductsSold`, `idProducts`, `idUser`, `numberSold`, `createDate`, `idStateSold`, `state` y `stockDeductionId` (UUID). Una compensacion de solicitud fallida puede tener `idProductsSold=null`. Los ceros del listado son solo de presentacion.
@@ -189,14 +189,58 @@ Base URL: `/api/v1/products-sold`
 | --- | --- | --- |
 | `GET` | `/api/v1/products-sold` | Lista todas las ventas. Permite filtrar por usuario con `?idUser={id}`. |
 | `GET` | `/api/v1/products-sold/{id}` | Obtiene una venta por ID. |
-| `POST` | `/api/v1/products-sold` | Solicita la compra y descuenta stock mediante Products. |
+| `POST` | `/api/v1/products-sold` | Compra varios productos y descuenta stock mediante Products. |
 | `POST` | `/api/v1/products-sold/{id}/payment/accept` | Marca PAGADO y asigna el producto al usuario. |
 | `POST` | `/api/v1/products-sold/{id}/payment/reject` | Marca CANCELADO y publica la devolucion de stock. |
 | `PUT` | `/api/v1/products-sold/{id}` | Actualiza una venta existente. |
 | `PATCH` | `/api/v1/products-sold/{id}/state/{idStateSold}` | Cambia solo el estado de una venta. |
 | `DELETE` | `/api/v1/products-sold/{id}` | Elimina una venta por ID. |
 
-Request para crear o actualizar una venta:
+Request para comprar uno o varios productos (`POST`):
+
+```json
+{
+  "idUser": 5,
+  "idStateSold": 1,
+  "products": [
+    { "idProducts": 10, "numberSold": 2 },
+    { "idProducts": 20, "numberSold": 1 }
+  ]
+}
+```
+
+`idStateSold` debe corresponder a `PENDIENTE`. `products` es obligatorio y no puede estar vacio ni contener elementos nulos. Los IDs deben ser positivos y cada cantidad debe ser mayor a cero. No se permiten IDs de producto repetidos: use `numberSold` para la cantidad total de cada producto.
+
+El `POST` responde `200 OK` con un arreglo de ventas, en el mismo orden que `products`, cada una con su propio `idProductsSold`. Para comprar un solo producto, envie un arreglo de un elemento. El formato anterior con `idProducts` y `numberSold` en la raiz se reemplaza por este contrato para crear compras; `PUT` conserva el formato anterior.
+
+Se valida y descuenta el stock de cada producto antes de guardar. Todas las ventas y sus eventos se guardan en una sola transaccion: si falla un producto o el registro en base de datos, no se guardan ventas parciales y se solicita la devolucion asincrona de los descuentos intentados. Esto incluye la solicitud fallida, porque un timeout puede ocurrir despues de descontar stock. Si no se puede registrar alguna compensacion, el error queda en los logs para su recuperacion.
+
+El pago se acepta o rechaza por cada `idProductsSold` usando los endpoints existentes; no se crea un pedido agrupado ni un pago unico para el conjunto.
+
+Ejemplo de respuesta del `POST`:
+
+```json
+[
+  {
+    "idProductsSold": 100,
+    "idProducts": 10,
+    "idUser": 5,
+    "numberSold": 2,
+    "createDate": "2026-10-22T10:30:00",
+    "stateSold": { "idStateSold": 1, "nameState": "PENDIENTE" }
+  },
+  {
+    "idProductsSold": 101,
+    "idProducts": 20,
+    "idUser": 5,
+    "numberSold": 1,
+    "createDate": "2026-10-22T10:30:00",
+    "stateSold": { "idStateSold": 1, "nameState": "PENDIENTE" }
+  }
+]
+```
+
+Request para actualizar una venta (`PUT`):
 
 ```json
 {
@@ -207,7 +251,7 @@ Request para crear o actualizar una venta:
 }
 ```
 
-Response:
+Response de `PUT` o de la consulta por ID:
 
 ```json
 {
@@ -225,7 +269,8 @@ Response:
 
 ## Validaciones y Errores
 
-- `ProductsSoldRequest` requiere `idProducts`, `idUser`, `numberSold` e `idStateSold`.
+- `PurchaseRequest` requiere `idUser`, `idStateSold` y una lista `products` con `idProducts` y `numberSold` por producto.
+- `ProductsSoldRequest` (actualizacion) requiere `idProducts`, `idUser`, `numberSold` e `idStateSold`.
 - `numberSold` debe ser mayor a `0`.
 - `StateSoldRequest` requiere `nameState` con un maximo de `100` caracteres.
 - No se permiten estados duplicados por nombre, ignorando mayusculas y minusculas.

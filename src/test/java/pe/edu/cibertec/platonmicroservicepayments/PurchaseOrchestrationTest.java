@@ -21,8 +21,12 @@ import pe.edu.cibertec.platonmicroservicepayments.service.impl.StockReturnCompen
 import java.util.UUID;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
+import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
+import pe.edu.cibertec.platonmicroservicepayments.service.impl.PurchaseStockDeduction;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,5 +64,84 @@ class PurchaseOrchestrationTest {
     void rejectsUnknownStateBeforePublishingRequest() {
         assertThrows(ResourceNotFoundException.class, () -> service.create(request));
         verifyNoInteractions(availability, registration);
+    }
+
+    private PurchaseRequest cart() {
+        return new PurchaseRequest(2L, 1L, List.of(
+                new PurchaseRequest.Item(1L, 2), new PurchaseRequest.Item(3L, 1)));
+    }
+
+    @Test
+    void validatesAllProductsBeforeSavingCartWithDistinctDeductionIds() {
+        when(states.findById(1L)).thenReturn(Optional.of(StateSold.builder().nameState("PENDIENTE").build()));
+        var attempts = new ArrayList<PurchaseStockDeduction>();
+        doAnswer(invocation -> {
+            attempts.add(new PurchaseStockDeduction(invocation.getArgument(0), invocation.getArgument(1)));
+            return null;
+        }).when(availability).requireAvailable(any(), any());
+        when(registration.registerAll(anyList())).thenAnswer(invocation -> {
+            assertEquals(2, attempts.size());
+            assertEquals(attempts, invocation.getArgument(0));
+            return List.of();
+        });
+
+        service.createMultiple(cart());
+
+        assertEquals(new ProductsSoldRequest(1L, 2L, 2, 1L), attempts.get(0).request());
+        assertEquals(new ProductsSoldRequest(3L, 2L, 1, 1L), attempts.get(1).request());
+        assertNotEquals(attempts.get(0).deductionId(), attempts.get(1).deductionId());
+        verify(registration).registerAll(attempts);
+        verifyNoInteractions(compensation);
+    }
+
+    @Test
+    void compensatesEveryAttemptIncludingRejectedProductAndDoesNotSaveCart() {
+        when(states.findById(1L)).thenReturn(Optional.of(StateSold.builder().nameState("PENDIENTE").build()));
+        var attempts = new ArrayList<PurchaseStockDeduction>();
+        doAnswer(invocation -> {
+            attempts.add(new PurchaseStockDeduction(invocation.getArgument(0), invocation.getArgument(1)));
+            if (attempts.size() == 2) throw new ProductUnavailableException("sin stock");
+            return null;
+        }).when(availability).requireAvailable(any(), any());
+
+        assertThrows(ProductUnavailableException.class, () -> service.createMultiple(cart()));
+
+        verifyNoInteractions(registration);
+        for (var attempt : attempts) verify(compensation).enqueue(attempt.request(), attempt.deductionId());
+        verify(compensation, times(2)).enqueue(any(), any());
+    }
+
+    @Test
+    void compensatesAllProductsWhenDatabaseRegistrationFailsEvenIfOneCompensationFails() {
+        when(states.findById(1L)).thenReturn(Optional.of(StateSold.builder().nameState("PENDIENTE").build()));
+        var failure = new IllegalStateException("database failure");
+        var attempts = new ArrayList<PurchaseStockDeduction>();
+        doAnswer(invocation -> {
+            attempts.add(new PurchaseStockDeduction(invocation.getArgument(0), invocation.getArgument(1)));
+            return null;
+        }).when(availability).requireAvailable(any(), any());
+        when(registration.registerAll(anyList())).thenThrow(failure);
+        doThrow(new IllegalStateException("compensation failure")).doNothing()
+                .when(compensation).enqueue(any(), any());
+
+        assertSame(failure, assertThrows(IllegalStateException.class, () -> service.createMultiple(cart())));
+        assertEquals(1, failure.getSuppressed().length);
+        for (var attempt : attempts) verify(compensation).enqueue(attempt.request(), attempt.deductionId());
+    }
+
+    @Test
+    void rejectsDuplicateProductsBeforeDeductingStock() {
+        when(states.findById(1L)).thenReturn(Optional.of(StateSold.builder().nameState("PENDIENTE").build()));
+        var duplicate = new PurchaseRequest(2L, 1L, List.of(
+                new PurchaseRequest.Item(1L, 1), new PurchaseRequest.Item(1L, 2)));
+        assertThrows(IllegalArgumentException.class, () -> service.createMultiple(duplicate));
+        verifyNoInteractions(availability, registration, compensation);
+    }
+
+    @Test
+    void rejectsNonPendingCartBeforeDeductingStock() {
+        when(states.findById(1L)).thenReturn(Optional.of(StateSold.builder().nameState("PAGADO").build()));
+        assertThrows(IllegalArgumentException.class, () -> service.createMultiple(cart()));
+        verifyNoInteractions(availability, registration, compensation);
     }
 }
