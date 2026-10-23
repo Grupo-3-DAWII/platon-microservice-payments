@@ -65,16 +65,27 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
         if (normalizedState != null && !Set.of("PENDIENTE", "PAGADO", "CANCELADO").contains(normalizedState)) {
             throw new IllegalArgumentException("state debe ser PENDIENTE, PAGADO o CANCELADO");
         }
-        var sales = listRepository.findAll(filters.idUser(), normalizedState, PageRequest.of(page, size));
+        String search = filters.search() == null || filters.search().isBlank()
+                ? null : filters.search().trim();
+        if (search != null && search.length() > 100) {
+            throw new IllegalArgumentException("search no puede superar 100 caracteres");
+        }
+
+        var sales = listRepository.findAll(filters.idUser(), normalizedState, search,
+                PageRequest.of(page, size));
+
         String message = null;
         if (sales.isEmpty()) {
             if (sales.getTotalElements() > 0) {
                 message = "No hay pedidos en esta pagina";
+            } else if (search != null) {
+                message = "No se encontraron pedidos para la búsqueda";
             } else {
-                message = switch (normalizedState == null ? "PENDIENTE" : normalizedState) {
+                message = switch (normalizedState == null ? "TODOS" : normalizedState) {
                     case "PAGADO" -> "No hay pedidos pagados";
                     case "CANCELADO" -> "No hay pedidos cancelados";
-                    default -> "No hay pedidos pendientes";
+                    case "PENDIENTE" -> "No hay pedidos pendientes";
+                    default -> "No hay pedidos";
                 };
             }
         }
