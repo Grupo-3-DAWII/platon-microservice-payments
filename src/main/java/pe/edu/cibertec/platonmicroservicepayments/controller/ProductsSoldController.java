@@ -1,12 +1,6 @@
 package pe.edu.cibertec.platonmicroservicepayments.controller;
 
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
+import pe.edu.cibertec.platonmicroservicepayments.dto.*;
 import pe.edu.cibertec.platonmicroservicepayments.service.ProductsSoldService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +22,7 @@ public class ProductsSoldController {
 
     //Obtener venta por id
     @GetMapping("/{id}")
-    public PurchaseResponse get(@PathVariable Long id) {
+    public ProductsSoldListResponse get(@PathVariable Long id) {
         return service.findById(id);
     }
 

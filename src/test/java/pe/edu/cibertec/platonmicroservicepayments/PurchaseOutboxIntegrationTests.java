@@ -74,7 +74,7 @@ class PurchaseOutboxIntegrationTests {
                     .filter(item -> item.idProductsSold().equals(sale.idProductsSold())).count());
             // La consulta usa JDBC: flush para ver la decision de JPA dentro de esta transaccion.
             entityManager.flush();
-            var page = listing.findAll(2L, "PAGADO", PageRequest.of(0, 100));
+            var page = listing.findAll(2L, "PAGADO",null, PageRequest.of(0, 100));
             var header = page.getContent().stream().filter(row -> row.idProductsSold().equals(sale.idProductsSold()))
                     .findFirst().orElseThrow();
             assertEquals(3, header.products().size());

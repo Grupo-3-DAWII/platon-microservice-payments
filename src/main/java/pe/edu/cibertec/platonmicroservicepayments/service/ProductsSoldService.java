@@ -1,19 +1,13 @@
 package pe.edu.cibertec.platonmicroservicepayments.service;
 
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
+import pe.edu.cibertec.platonmicroservicepayments.dto.*;
 
 public interface ProductsSoldService {
 
     /** Pagina las ventas filtradas por usuario y estado. */
     ProductsSoldPageResponse findAll(ProductsSoldFilterRequest filters);
 
-    PurchaseResponse findById(Long id);
+    ProductsSoldListResponse findById(Long id);
 
     ProductsSoldResponse create(ProductsSoldRequest request);
 

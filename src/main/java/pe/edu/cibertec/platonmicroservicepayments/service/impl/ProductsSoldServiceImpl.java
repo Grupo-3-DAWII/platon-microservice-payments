@@ -1,12 +1,6 @@
 package pe.edu.cibertec.platonmicroservicepayments.service.impl;
 
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
+import pe.edu.cibertec.platonmicroservicepayments.dto.*;
 import pe.edu.cibertec.platonmicroservicepayments.repository.ProductPriceRepository;
 import java.math.BigDecimal;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ResourceNotFoundException;
@@ -95,8 +89,9 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
 
     @Override
     @Transactional(readOnly = true)
-    public PurchaseResponse findById(Long id) {
-        return mapper.toPurchaseResponse(getOrThrow(id));
+    public ProductsSoldListResponse findById(Long id) {
+        return listRepository.findById(id)
+                .orElseThrow(/* la misma excepción de "no encontrado" que ya usas */);
     }
 
     @Override

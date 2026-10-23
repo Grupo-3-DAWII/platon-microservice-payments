@@ -1,5 +1,6 @@
 package pe.edu.cibertec.platonmicroservicepayments.repository;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Page;
@@ -11,18 +12,27 @@ import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /** La paginacion cuenta ventas, no sus productos. */
 @Repository
 public class ProductsSoldListRepository {
     private final JdbcClient jdbc;
-
     public ProductsSoldListRepository(DataSource dataSource) {
         jdbc = JdbcClient.create(dataSource);
     }
-
     public Page<ProductsSoldListResponse> findAll(Long idUser, String state, String search, Pageable pageable) {
+        return query(null, idUser, state, search, pageable);
+    }
+
+    public Optional<ProductsSoldListResponse> findById(Long idProductsSold) {
+        return query(idProductsSold, null, null, null, PageRequest.of(0, 1))
+                .getContent().stream().findFirst();
+    }
+
+    private Page<ProductsSoldListResponse> query(Long idProductsSold, Long idUser, String state,
+                                                 String search, Pageable pageable) {
         String from = """
                 FROM payment.products_sold sale
                 JOIN payment.state_sold state ON state.id_state_sold = sale.id_state_sold
