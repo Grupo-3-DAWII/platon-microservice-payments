@@ -14,7 +14,7 @@ import java.net.URI;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/states-sold")
+@RequestMapping("/api/states-sold")
 @RequiredArgsConstructor
 public class StateSoldController {
 

@@ -12,7 +12,7 @@ import pe.edu.cibertec.platonmicroservicepayments.service.UserProductsService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/user-products")
+@RequestMapping("/api/user-products")
 @RequiredArgsConstructor
 public class UserProductsController {
     private final UserProductsService service;
