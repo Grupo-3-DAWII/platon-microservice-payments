@@ -1,12 +1,6 @@
 package pe.edu.cibertec.platonmicroservicepayments.service.impl;
 
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldPageResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldFilterRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.ProductsSoldResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseRequest;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PurchaseResponse;
-import pe.edu.cibertec.platonmicroservicepayments.dto.PaymentRequest;
+import pe.edu.cibertec.platonmicroservicepayments.dto.*;
 import pe.edu.cibertec.platonmicroservicepayments.repository.ProductPriceRepository;
 import java.math.BigDecimal;
 import pe.edu.cibertec.platonmicroservicepayments.exception.ResourceNotFoundException;
@@ -65,16 +59,27 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
         if (normalizedState != null && !Set.of("PENDIENTE", "PAGADO", "CANCELADO").contains(normalizedState)) {
             throw new IllegalArgumentException("state debe ser PENDIENTE, PAGADO o CANCELADO");
         }
-        var sales = listRepository.findAll(filters.idUser(), normalizedState, PageRequest.of(page, size));
+        String search = filters.search() == null || filters.search().isBlank()
+                ? null : filters.search().trim();
+        if (search != null && search.length() > 100) {
+            throw new IllegalArgumentException("search no puede superar 100 caracteres");
+        }
+
+        var sales = listRepository.findAll(filters.idUser(), normalizedState, search,
+                PageRequest.of(page, size));
+
         String message = null;
         if (sales.isEmpty()) {
             if (sales.getTotalElements() > 0) {
                 message = "No hay pedidos en esta pagina";
+            } else if (search != null) {
+                message = "No se encontraron pedidos para la búsqueda";
             } else {
-                message = switch (normalizedState == null ? "PENDIENTE" : normalizedState) {
+                message = switch (normalizedState == null ? "TODOS" : normalizedState) {
                     case "PAGADO" -> "No hay pedidos pagados";
                     case "CANCELADO" -> "No hay pedidos cancelados";
-                    default -> "No hay pedidos pendientes";
+                    case "PENDIENTE" -> "No hay pedidos pendientes";
+                    default -> "No hay pedidos";
                 };
             }
         }
@@ -84,8 +89,9 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
 
     @Override
     @Transactional(readOnly = true)
-    public PurchaseResponse findById(Long id) {
-        return mapper.toPurchaseResponse(getOrThrow(id));
+    public ProductsSoldListResponse findById(Long id) {
+        return listRepository.findById(id)
+                .orElseThrow(/* la misma excepción de "no encontrado" que ya usas */);
     }
 
     @Override
