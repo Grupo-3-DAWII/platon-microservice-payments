@@ -22,7 +22,7 @@ class PurchaseControllerTest {
     @BeforeEach
     void setUp() {
         service = mock(ProductsSoldService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new ProductsSoldController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new ProductsSoldController(service, mock(pe.edu.cibertec.platonmicroservicepayments.service.impl.OrderFulfillmentService.class), mock(pe.edu.cibertec.platonmicroservicepayments.service.impl.PaymentDecisionService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
     }
 
@@ -33,7 +33,7 @@ class PurchaseControllerTest {
         when(service.createMultiple(request)).thenReturn(new PurchaseResponse(100L, 2L, null,
                 new StateSoldResponse(1L, "PENDIENTE"), List.of(
                 new PurchaseResponse.Item(10L, 2, null, null), new PurchaseResponse.Item(20L, 1, null, null)), new BigDecimal("30.00")));
-        mvc.perform(post("/api/v1/products-sold").contentType(MediaType.APPLICATION_JSON).content("""
+        mvc.perform(post("/api/products-sold").contentType(MediaType.APPLICATION_JSON).content("""
                 {"idUser":2,"idStateSold":1,"totalAmount":30.00,"products":[
                   {"idProducts":10,"numberSold":2},{"idProducts":20,"numberSold":1}]}
                 """))
@@ -50,7 +50,7 @@ class PurchaseControllerTest {
         for (String products : List.of("null", "[]", "[null]",
                 "[{\"idProducts\":1,\"numberSold\":0}]",
                 "[{\"numberSold\":1}]", "[{\"idProducts\":-1,\"numberSold\":1}]")) {
-            mvc.perform(post("/api/v1/products-sold").contentType(MediaType.APPLICATION_JSON)
+            mvc.perform(post("/api/products-sold").contentType(MediaType.APPLICATION_JSON)
                     .content("{\"idUser\":2,\"idStateSold\":1,\"totalAmount\":10.00,\"products\":" + products + "}"))
                     .andExpect(status().isBadRequest());
         }
@@ -66,7 +66,7 @@ class PurchaseControllerTest {
         when(service.rejectPayment(100L)).thenReturn(new PurchaseResponse(100L, 2L, null,
                 new StateSoldResponse(3L, "CANCELADO"), products, new BigDecimal("60.00")));
         for (String action : List.of("accept", "reject")) {
-            mvc.perform(post("/api/v1/products-sold/100/payment/" + action)
+            mvc.perform(post("/api/products-sold/100/payment/" + action)
                             .contentType(MediaType.APPLICATION_JSON).content("{\"amount\":60.00}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.idProductsSold").value(100))
@@ -78,14 +78,14 @@ class PurchaseControllerTest {
     @Test
     void rejectsMissingNegativeExcessiveOrOverPreciseAmounts() throws Exception {
         for (String amount : List.of("null", "-1.00", "1.001", "10000000000000000.00")) {
-            mvc.perform(post("/api/v1/products-sold/100/payment/accept").contentType(MediaType.APPLICATION_JSON)
+            mvc.perform(post("/api/products-sold/100/payment/accept").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"amount\":" + amount + "}"))
                     .andExpect(status().isBadRequest());
-            mvc.perform(post("/api/v1/products-sold").contentType(MediaType.APPLICATION_JSON)
+            mvc.perform(post("/api/products-sold").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"idUser\":2,\"idStateSold\":1,\"products\":[{\"idProducts\":10,\"numberSold\":1}],\"totalAmount\":" + amount + "}"))
                     .andExpect(status().isBadRequest());
         }
-        mvc.perform(post("/api/v1/products-sold/100/payment/accept"))
+        mvc.perform(post("/api/products-sold/100/payment/accept"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
@@ -95,7 +95,7 @@ class PurchaseControllerTest {
         when(service.acceptPayment(100L, new PaymentRequest(new BigDecimal("0.01"))))
                 .thenThrow(new pe.edu.cibertec.platonmicroservicepayments.exception.ProductUnavailableException(
                         "El monto del pago no coincide con el total de la venta"));
-        mvc.perform(post("/api/v1/products-sold/100/payment/accept").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/products-sold/100/payment/accept").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"amount\":0.01}"))
                 .andExpect(status().isConflict());
     }

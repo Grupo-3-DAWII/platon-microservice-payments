@@ -32,6 +32,29 @@ public class PaymentDecisionService {
         return decide(id, false, null);
     }
 
+    @Transactional
+    public PurchaseResponse simulateCard(Long id, Long userId, BigDecimal amount, String testToken) {
+        if (!"visa-platinum-test".equals(testToken)) {
+            throw new ProductUnavailableException("Solo se admite la tarjeta de prueba Visa Platinum");
+        }
+        var purchase = purchases.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
+        if (!purchase.getIdUser().equals(userId)) {
+            throw new ResourceNotFoundException("Pedido no encontrado");
+        }
+        if ("PAGADO".equalsIgnoreCase(purchase.getStateSold().getNameState())
+                && !"VISA_PLATINUM_SIMULATED".equals(purchase.getPaymentMethod())) {
+            throw new ProductUnavailableException("Este pedido ya tiene un pago registrado");
+        }
+        var response = decide(id, true, amount);
+        if (purchase.getPaymentReference() == null) {
+            purchase.setPaymentMethod("VISA_PLATINUM_SIMULATED");
+            purchase.setPaidAt(java.time.LocalDateTime.now());
+            purchase.setPaymentReference("SIM-" + java.util.UUID.randomUUID());
+        }
+        return response;
+    }
+
     private PurchaseResponse decide(Long id, boolean accepted, BigDecimal amount) {
         var purchase = purchases.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada con id: " + id));
@@ -64,6 +87,7 @@ public class PaymentDecisionService {
         if (accepted) {
             userProducts.assign(purchase);
         } else {
+            purchase.setOrderStatus(pe.edu.cibertec.platonmicroservicepayments.model.OrderStatus.CANCELADO);
             if (purchase.getItems().isEmpty()) {
                 outbox.enqueue(mapper.toResponse(purchase), purchase.getStockDeductionId(), "payment.rejected");
             } else {

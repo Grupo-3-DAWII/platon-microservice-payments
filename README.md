@@ -364,3 +364,10 @@ Get-Content -Raw ..\DATABASE\init\03-purchase-amounts-upgrade.sql | docker exec 
 ```
 
 En instalaciones nuevas el init crea los campos y ejecuta los scripts de actualizacion. Las ventas anteriores conservan `NULL` en importes desconocidos.
+## Seguimiento del pedido
+
+Antes de iniciar esta versión, ejecutar `database/05-order-status.sql` en la base compartida. Agrega `order_status` sin reemplazar los estados de pago ni borrar registros. Las consultas de pedidos incluyen ahora `orderStatus`; `stateSold` conserva su significado de pago.
+
+`PATCH /api/products-sold/{id}/order-status` recibe `{"orderStatus":"PREPARANDO"}` y devuelve `{"idProductsSold":123,"orderStatus":"PREPARANDO"}`. Requiere una sesión de ADMIN o SELLER por el Gateway y un pedido pagado. El personal puede seleccionar PENDIENTE, EN_CAMINO o ENTREGADO, incluso para corregir un estado anterior. Repetir el mismo estado no vuelve a procesar nada; estados no admitidos devuelven 409. Los pedidos cancelados antes del pago conservan CANCELADO.
+
+Este cambio no genera cobros, movimientos de inventario ni eventos de stock. Los servicios siguen siendo internos; la identidad se toma de la cabecera que establece el Gateway, no del cuerpo de la petición.

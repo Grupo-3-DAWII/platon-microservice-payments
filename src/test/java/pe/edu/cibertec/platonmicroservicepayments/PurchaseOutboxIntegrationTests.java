@@ -145,4 +145,21 @@ class PurchaseOutboxIntegrationTests {
         }
         return registration.registerAll(deductions);
     }
+    @Autowired private pe.edu.cibertec.platonmicroservicepayments.service.ProductsSoldService salesService;
+
+    @Test
+    void findsEachSaleByItsOwnIdAndRejectsMissingSale() {
+        var jdbc = JdbcClient.create(dataSource);
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            transaction.setRollbackOnly();
+            var first = newSale(jdbc);
+            var second = newSale(jdbc);
+            assertEquals(first.idProductsSold(), salesService.findById(first.idProductsSold()).idProductsSold());
+            assertEquals(second.idProductsSold(), salesService.findById(second.idProductsSold()).idProductsSold());
+            assertEquals(3, salesService.findById(first.idProductsSold()).products().size());
+            assertThrows(pe.edu.cibertec.platonmicroservicepayments.exception.ResourceNotFoundException.class,
+                    () -> salesService.findById(Long.MAX_VALUE));
+        });
+    }
+
 }

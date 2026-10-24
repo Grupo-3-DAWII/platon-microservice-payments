@@ -40,6 +40,10 @@ public class ProductsSoldListRepository {
                 WHERE 1 = 1
                 """;
         Map<String, Object> parameters = new HashMap<>();
+        if (idProductsSold != null) {
+            from += " AND sale.id_products_sold = :idProductsSold";
+            parameters.put("idProductsSold", idProductsSold);
+        }
         if (idUser != null) {
             from += " AND sale.id_user = :idUser";
             parameters.put("idUser", idUser);
@@ -68,7 +72,7 @@ public class ProductsSoldListRepository {
         }
         long total = jdbc.sql("SELECT COUNT(*) " + from).params(parameters).query(Long.class).single();
         var headers = jdbc.sql("""
-                SELECT sale.id_products_sold, sale.id_user, sale.create_date, sale.total_amount,
+                SELECT sale.id_products_sold, sale.id_user, sale.create_date, sale.total_amount, sale.payment_method, sale.paid_at, sale.payment_reference, sale.order_status,
                        state.id_state_sold, state.name_state,
                        buyer.iduser AS buyer_id, buyer.name AS buyer_name, buyer.lastname
                 """ + from + " ORDER BY sale.create_date DESC NULLS LAST, sale.id_products_sold DESC LIMIT :limit OFFSET :offset")
@@ -78,7 +82,9 @@ public class ProductsSoldListRepository {
                         rs.getTimestamp("create_date") == null ? null : rs.getTimestamp("create_date").toLocalDateTime(),
                         new StateSoldResponse(rs.getLong("id_state_sold"), rs.getString("name_state")),
                         rs.getObject("buyer_id") == null ? null : new ProductsSoldListResponse.BuyerResponse(
-                                rs.getString("buyer_name"), rs.getString("lastname")), List.of(), rs.getBigDecimal("total_amount"))).list();
+                                rs.getString("buyer_name"), rs.getString("lastname")), List.of(), rs.getBigDecimal("total_amount"), rs.getString("payment_method"),
+                        rs.getTimestamp("paid_at") == null ? null : rs.getTimestamp("paid_at").toLocalDateTime(),
+                        rs.getString("payment_reference"), rs.getString("order_status"))).list();
         if (headers.isEmpty()) return new PageImpl<>(List.of(), pageable, total);
         var ids = headers.stream().map(ProductsSoldListResponse::idProductsSold).toList();
         var items = jdbc.sql("""
@@ -104,7 +110,7 @@ public class ProductsSoldListRepository {
                 Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
         var content = headers.stream().map(header -> new ProductsSoldListResponse(header.idProductsSold(),
                 header.idUser(), header.createDate(), header.stateSold(), header.buyer(),
-                bySale.getOrDefault(header.idProductsSold(), List.of()), header.totalAmount())).toList();
+                bySale.getOrDefault(header.idProductsSold(), List.of()), header.totalAmount(), header.paymentMethod(), header.paidAt(), header.paymentReference(), header.orderStatus())).toList();
         return new PageImpl<>(content, pageable, total);
     }
 }

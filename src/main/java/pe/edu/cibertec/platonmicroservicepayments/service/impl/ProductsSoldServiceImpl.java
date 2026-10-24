@@ -91,7 +91,7 @@ public class ProductsSoldServiceImpl implements ProductsSoldService {
     @Transactional(readOnly = true)
     public ProductsSoldListResponse findById(Long id) {
         return listRepository.findById(id)
-                .orElseThrow(/* la misma excepción de "no encontrado" que ya usas */);
+                .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada con id: " + id));
     }
 
     @Override
