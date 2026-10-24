@@ -5,7 +5,7 @@ services:
     container_name: platon-payments-api
     restart: unless-stopped
     environment:
-      DB_URL: jdbc:postgresql://host.docker.internal:5432/account_db?currentSchema=products
+      DB_URL: jdbc:postgresql://host.docker.internal:5432/account_db
       DB_USERNAME: account_user
       DB_PASSWORD: account_pass
       CONFIG_SERVER_URL: ${CONFIG_SERVER_URL:-http://host.docker.internal:8888}
