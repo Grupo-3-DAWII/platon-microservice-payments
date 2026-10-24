@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+    container_name: platon-payments-api
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://host.docker.internal:5432/account_db?currentSchema=products
+      DB_USERNAME: account_user
+      DB_PASSWORD: account_pass
+      CONFIG_SERVER_URL: ${CONFIG_SERVER_URL:-http://host.docker.internal:8888}
+      SERVER_PORT: 8082
+      RABBITMQ_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8082:8082"
