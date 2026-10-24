@@ -104,6 +104,12 @@ public class GlobalExceptionHandler {
                 request, null);
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ApiErrorResponse> handleStatus(org.springframework.web.server.ResponseStatusException ex,
+                                                         HttpServletRequest request) {
+        return build(HttpStatus.valueOf(ex.getStatusCode().value()), ex.getReason(), request, null);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
         log.error("Error no controlado en {}", request.getRequestURI(), ex);

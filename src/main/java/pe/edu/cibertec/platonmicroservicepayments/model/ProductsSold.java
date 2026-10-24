@@ -47,6 +47,18 @@ public class ProductsSold {
     @Column(name = "total_amount", precision = 18, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "payment_method")
+    private String paymentMethod;
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
+    @Column(name = "payment_reference")
+    private String paymentReference;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_status", nullable = false, length = 20)
+    private OrderStatus orderStatus = OrderStatus.PENDIENTE;
+
     @Builder.Default
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")

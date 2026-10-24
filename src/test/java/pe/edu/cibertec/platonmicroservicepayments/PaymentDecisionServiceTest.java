@@ -105,6 +105,28 @@ class PaymentDecisionServiceTest {
         verifyNoInteractions(states, userProducts, outbox);
     }
 
+    @Test
+    void simulatedCardRecordsOnePaymentAndRejectsOtherCustomersOrTokens() {
+        var purchase = purchase("PENDIENTE");
+        when(purchases.findByIdForUpdate(1L)).thenReturn(Optional.of(purchase));
+        when(states.findFirstByNameStateIgnoreCase("PAGADO")).thenReturn(Optional.of(state("PAGADO")));
+        assertThrows(ProductUnavailableException.class, () -> service.simulateCard(1L, 2L, new BigDecimal("10"), "invalid"));
+        assertThrows(ResourceNotFoundException.class, () -> service.simulateCard(1L, 99L, new BigDecimal("10"), "visa-platinum-test"));
+        assertThrows(ProductUnavailableException.class, () -> service.simulateCard(1L, 2L, new BigDecimal("9.99"), "visa-platinum-test"));
+        assertEquals("PENDIENTE", purchase.getStateSold().getNameState());
+        assertNull(purchase.getPaymentReference());
+        service.simulateCard(1L, 2L, new BigDecimal("10"), "visa-platinum-test");
+        assertEquals("PAGADO", purchase.getStateSold().getNameState());
+        assertEquals("VISA_PLATINUM_SIMULATED", purchase.getPaymentMethod());
+        assertNotNull(purchase.getPaidAt());
+        var reference = purchase.getPaymentReference();
+        var date = purchase.getPaidAt();
+        service.simulateCard(1L, 2L, new BigDecimal("10"), "visa-platinum-test");
+        assertEquals(reference, purchase.getPaymentReference());
+        assertEquals(date, purchase.getPaidAt());
+        verifyNoInteractions(outbox);
+    }
+
     private ProductsSold purchase(String status) {
         return ProductsSold.builder().idProductsSold(1L).idProducts(1L).idUser(2L).numberSold(1)
                 .stockDeductionId(UUID.randomUUID()).totalAmount(new BigDecimal("10.00")).stateSold(state(status)).build();

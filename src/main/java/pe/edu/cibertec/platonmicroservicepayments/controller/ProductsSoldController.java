@@ -14,6 +14,23 @@ import org.springframework.web.bind.annotation.*;
 public class ProductsSoldController {
 
     private final ProductsSoldService service;
+    private final pe.edu.cibertec.platonmicroservicepayments.service.impl.OrderFulfillmentService fulfillment;
+    private final pe.edu.cibertec.platonmicroservicepayments.service.impl.PaymentDecisionService payments;
+
+    @PostMapping("/{id}/payment/simulate-card")
+    public ResponseEntity<PurchaseResponse> simulateCard(@PathVariable Long id,
+            @RequestHeader("X-Platon-User-Id") Long userId,
+            @Valid @RequestBody SimulatedCardRequest request) {
+        return ResponseEntity.ok(payments.simulateCard(id, userId, request.amount(), request.testToken()));
+    }
+
+    @PatchMapping("/{id}/order-status")
+    public OrderStatusResponse updateOrderStatus(@PathVariable Long id,
+            @RequestHeader("X-Platon-User-Id") Long actorId,
+            @Valid @RequestBody OrderStatusRequest request) {
+        return fulfillment.update(id, actorId, request.orderStatus());
+    }
+
     //listar ventas
     @GetMapping
     public ResponseEntity<ProductsSoldPageResponse> list(@ModelAttribute ProductsSoldFilterRequest filters) {
