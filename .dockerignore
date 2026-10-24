@@ -1,0 +1,23 @@
+# Compilados
+target/
+
+# Control de versiones
+.git
+.gitignore
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Variables locales y logs
+.env
+*.log
